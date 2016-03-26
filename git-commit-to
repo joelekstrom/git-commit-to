@@ -8,8 +8,18 @@ try() {
 	fi
 }
 
+# Make sure the user entered a branch
+if [ -z "$1" ]; then
+	echo "Usage: git commit-to branch-name"
+	exit 1
+fi
+
 # Store the current branch
 orig_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Make sure target branch exists
+try "git checkout $1 --quiet"
+try "git checkout ${orig_branch} --quiet"
 
 # Commit and store the hash for future use
 try "git commit"

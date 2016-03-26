@@ -1,0 +1,37 @@
+#!/bin/sh
+
+# This function tries a command and exits if it fails
+try() {
+	$1
+	if [ $? -ne 0 ]; then
+		exit 1
+	fi
+}
+
+# Store the current branch
+orig_branch=$(git rev-parse --abbrev-ref HEAD)
+
+# Commit and store the hash for future use
+try "git commit"
+commit=$(git rev-parse HEAD)
+
+# Stash any eventual other changes
+stash=0
+git diff-index --quiet HEAD
+if [ $? -ne 0 ]; then
+	stash=1
+	try "git stash"
+fi
+
+# Checkout the target branch and cherry-pick the commit
+try "git checkout $1 --quiet"
+try "git cherry-pick ${commit}"
+
+# Go back to the original branch and remove the commit
+try "git checkout ${orig_branch} --quiet"
+try "git reset --hard HEAD~1"
+
+# If there were changes stashed, pop them
+if [ $stash -ne 0 ]; then
+	try "git stash pop"
+fi

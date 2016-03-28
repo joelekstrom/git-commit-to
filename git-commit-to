@@ -1,12 +1,7 @@
 #!/bin/sh
 
-# This function tries a command and exits if it fails
-try() {
-	$1
-	if [ $? -ne 0 ]; then
-		exit 1
-	fi
-}
+# Abort if any command fails
+set -e
 
 # Make sure the user entered a branch
 if [ -z "$1" ]; then
@@ -14,34 +9,35 @@ if [ -z "$1" ]; then
 	exit 1
 fi
 
+# Make sure target branch exists
+if test -z $(git rev-parse --quiet --verify "$1"); then
+	echo "Error: Couldn't find a branch named '$1'."
+	exit 1
+fi
+
 # Store the current branch
 orig_branch=$(git rev-parse --abbrev-ref HEAD)
 
-# Make sure target branch exists
-try "git checkout $1 --quiet"
-try "git checkout ${orig_branch} --quiet"
-
 # Commit and store the hash for future use
-try "git commit"
+git commit --quiet
 commit=$(git rev-parse HEAD)
 
 # Stash any eventual other changes
-stash=0
-git diff-index --quiet HEAD
-if [ $? -ne 0 ]; then
+unstaged_files=$(git ls-files --exclude-standard --others)
+if ! git diff-files --quiet || ! test -z ${unstaged_files}; then
+	git stash save --include-untracked --quiet
 	stash=1
-	try "git stash"
 fi
 
 # Checkout the target branch and cherry-pick the commit
-try "git checkout $1 --quiet"
-try "git cherry-pick ${commit}"
+git checkout --quiet $1
+git cherry-pick ${commit}
 
 # Go back to the original branch and remove the commit
-try "git checkout ${orig_branch} --quiet"
-try "git reset --hard HEAD~1"
+git checkout --quiet ${orig_branch}
+git reset --quiet --hard HEAD~1
 
 # If there were changes stashed, pop them
-if [ $stash -ne 0 ]; then
-	try "git stash pop"
+if ! [ -z $stash ]; then
+	git stash pop --quiet
 fi
